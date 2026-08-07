@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRIS — Optical File Relay</title>
+<style>
+  :root{
+    --bg-0:#0a0b0f;
+    --bg-1:#14161d;
+    --bg-2:#1c1f29;
+    --bg-3:#242836;
+    --line:#2b2f3b;
+    --line-soft:#1f222c;
+    --text-0:#eceef3;
+    --text-1:#9da3b4;
+    --text-2:#666c7e;
+    --accent:#9b8cff;
+    --accent-dim:#6b5fc4;
+    --good:#3ddc84;
+    --warn:#ffb648;
+    --bad:#ff5f66;
+    --c-blk:#000; --c-blu:#2b6bff; --c-grn:#2fd45c; --c-cyn:#26d6d1;
+    --c-red:#ff3b3b; --c-mag:#e13bff; --c-yel:#f4d229; --c-wht:#fff;
+    --radius:12px;
+    --radius-sm:8px;
+    --font-display: ui-sans-serif, -apple-system, "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
+    --font-body: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #171a24 0%, var(--bg-0) 55%),
+      var(--bg-0);
+    color:var(--text-0);
+    font-family:var(--font-body);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent-dim);color:#fff;}
+  a{color:var(--accent);}
+  button, select, input{font-family:inherit;}
+  button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px;
+  }
+
+  .spectrum-strip{
+    height:4px;width:100%;border-radius:3px;
+    background:linear-gradient(90deg,
+      var(--c-blk) 0 12.5%, var(--c-blu) 12.5% 25%, var(--c-grn) 25% 37.5%,
+      var(--c-cyn) 37.5% 50%, var(--c-red) 50% 62.5%, var(--c-mag) 62.5% 75%,
+      var(--c-yel) 75% 87.5%, var(--c-wht) 87.5% 100%);
+    opacity:.9;
+  }
+
+  header.top{
+    max-width:980px;margin:0 auto;padding:38px 20px 18px;
+  }
+  .wordmark{
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  }
+  .wordmark h1{
+    font-family:var(--font-display);
+    font-size:clamp(30px,5vw,42px);
+    font-weight:800;
+    letter-spacing:.02em;
+    margin:0;
+    background:linear-gradient(90deg,#fff, #cfd3e6 60%, #9da3b4);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .wordmark .tag{
+    font-family:var(--font-mono);
+    font-size:13px;color:var(--text-1);
+    letter-spacing:.03em;
+  }
+  header.top .spectrum-strip{margin-top:16px;}
+  header.top p.sub{
+    color:var(--text-1);font-size:14.5px;line-height:1.55;margin:14px 0 0;max-width:640px;
+  }
+
+  main{max-width:980px;margin:0 auto;padding:8px 20px 80px;}
+
+  .tabs{
+    display:inline-flex;background:var(--bg-1);border:1px solid var(--line);
+    border-radius:999px;padding:4px;margin:22px 0 22px;gap:2px;
+  }
+  .tabs button{
+    appearance:none;border:none;background:transparent;color:var(--text-1);
+    padding:9px 20px;border-radius:999px;font-size:14px;font-weight:600;
+    cursor:pointer;transition:background .15s ease, color .15s ease;
+  }
+  .tabs button.active{background:var(--bg-3);color:#fff;}
+  .tabs button:not(.active):hover{color:var(--text-0);}
+
+  .panel{
+    background:var(--bg-1);border:1px solid var(--line);border-radius:var(--radius);
+    padding:26px;margin-bottom:20px;
+  }
+  .panel h2{
+    font-family:var(--font-display);font-size:18px;margin:0 0 4px;font-weight:700;
+  }
+  .panel p.hint{color:var(--text-1);font-size:13.5px;margin:0 0 18px;line-height:1.5;}
+  .hidden{display:none !important;}
+
+  /* ---- drop zone / file picker ---- */
+  .dropzone{
+    border:1.5px dashed var(--line);border-radius:var(--radius-sm);
+    padding:34px 20px;text-align:center;cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+    background:var(--bg-2);
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--accent);background:#1d1930;}
+  .dropzone .icon{font-size:26px;opacity:.8;margin-bottom:8px;}
+  .dropzone .primary{font-size:14.5px;color:var(--text-0);font-weight:600;}
+  .dropzone .secondary{font-size:12.5px;color:var(--text-2);margin-top:4px;}
+  input[type=file]{display:none;}
+
+  .file-card{
+    display:flex;align-items:center;gap:14px;background:var(--bg-2);
+    border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px;
+  }
+  .file-card .swatch{
+    width:40px;height:40px;border-radius:8px;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:17px;
+    background:var(--bg-3);border:1px solid var(--line);
+  }
+  .file-card .meta{min-width:0;flex:1;}
+  .file-card .name{font-size:14px;font-weight:600;color:var(--text-0);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .file-card .sub{font-size:12px;color:var(--text-2);font-family:var(--font-mono);margin-top:2px;}
+  .file-card button.clear{
+    appearance:none;border:1px solid var(--line);background:var(--bg-3);color:var(--text-1);
+    border-radius:7px;padding:7px 11px;font-size:12.5px;cursor:pointer;
+  }
+  .file-card button.clear:hover{color:#fff;border-color:var(--text-2);}
+
+  .preview-box{
+    margin-top:14px;border:1px solid var(--line);border-radius:var(--radius-sm);
+    background:var(--bg-0);overflow:hidden;
+  }
+  .preview-box img, .preview-box video{display:block;width:100%;max-height:340px;object-fit:contain;background:#000;}
+  .preview-box audio{width:100%;display:block;margin:16px;}
+  .preview-box iframe{width:100%;height:340px;border:0;background:#fff;}
+  .preview-box pre{
+    margin:0;padding:16px;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;
+    color:#cfd3e6;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+  }
+  .preview-box .generic{
+    padding:30px 20px;text-align:center;color:var(--text-1);font-size:13px;
+  }
+  .preview-box .generic .big{font-size:30px;display:block;margin-bottom:8px;}
+
+  /* ---- settings row ---- */
+  .settings-row{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:14px;margin:18px 0;
+  }
+  .field label{
+    display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--text-2);margin-bottom:7px;font-weight:600;
+  }
+  .field select, .field input[type=range]{width:100%;}
+  select{
+    background:var(--bg-2);border:1px solid var(--line);color:var(--text-0);
+    padding:9px 10px;border-radius:7px;font-size:13.5px;width:100%;
+  }
+  input[type=range]{accent-color:var(--accent);}
+  .field .rangeval{font-family:var(--font-mono);font-size:12px;color:var(--text-1);margin-top:4px;}
+
+  .stat-row{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:10px;margin-top:16px;
+  }
+  .stat{
+    background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+  }
+  .stat .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);font-weight:600;}
+  .stat .v{font-family:var(--font-mono);font-size:16px;color:var(--text-0);margin-top:3px;}
+
+  /* ---- aperture / iris frame ---- */
+  .aperture{
+    position:relative;width:100%;max-width:420px;aspect-ratio:1/1;margin:22px auto 8px;
+    border-radius:50%;
+    background:conic-gradient(from 0deg, var(--c-blu),var(--c-grn),var(--c-cyn),var(--c-red),var(--c-mag),var(--c-yel),var(--c-wht),var(--c-blu));
+    padding:5px;
+  }
+  .aperture.idle{background:var(--line);}
+  .aperture .ring{
+    position:absolute;inset:0;border-radius:50%;
+    animation:spin 6s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce){ .aperture .ring{animation:none;} }
+  .aperture-inner{
+    position:relative;width:100%;height:100%;border-radius:50%;overflow:hidden;
+    background:#000;display:flex;align-items:center;justify-content:center;
+  }
+  .aperture-inner canvas, .aperture-inner video{
+    width:100%;height:100%;object-fit:cover;display:block;
+  }
+  .aperture-inner .overlay-canvas{position:absolute;inset:0;pointer-events:none;}
+  .aperture-inner .placeholder{color:var(--text-2);font-size:13px;text-align:center;padding:20px;font-family:var(--font-mono);}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;justify-content:center;}
+  button.btn{
+    appearance:none;border:1px solid var(--line);background:var(--bg-2);color:var(--text-0);
+    padding:11px 20px;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;
+    transition:transform .1s ease, background .15s ease, border-color .15s ease;
+  }
+  button.btn:hover{background:var(--bg-3);border-color:var(--text-2);}
+  button.btn:active{transform:scale(.97);}
+  button.btn.primary{background:var(--accent);border-color:var(--accent);color:#151225;}
+  button.btn.primary:hover{background:#a99cff;}
+  button.btn.danger{border-color:#5c2c30;color:#ff9498;}
+  button.btn.danger:hover{background:#2a1517;}
+  button.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+  button.btn.small{padding:7px 13px;font-size:12.5px;}
+
+  .status-line{
+    text-align:center;font-family:var(--font-mono);font-size:12.5px;color:var(--text-1);
+    margin-top:14px;min-height:18px;
+  }
+  .status-line.good{color:var(--good);}
+  .status-line.warn{color:var(--warn);}
+  .status-line.bad{color:var(--bad);}
+
+  .progress-track{
+    height:8px;border-radius:5px;background:var(--bg-2);border:1px solid var(--line);
+    overflow:hidden;margin-top:16px;
+  }
+  .progress-fill{
+    height:100%;width:0%;
+    background:linear-gradient(90deg,var(--c-blu),var(--c-grn),var(--c-cyn),var(--c-red),var(--c-mag));
+    transition:width .18s ease;
+  }
+  .progress-label{
+    display:flex;justify-content:space-between;font-family:var(--font-mono);
+    font-size:11.5px;color:var(--text-2);margin-top:6px;
+  }
+
+  .callout{
+    display:flex;gap:10px;align-items:flex-start;background:var(--bg-2);
+    border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;
+    font-size:12.5px;color:var(--text-1);line-height:1.55;margin-top:16px;
+  }
+  .callout .ic{flex:none;font-size:15px;}
+  .toggle-row{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:var(--radius-sm);
+    padding:12px 14px;margin-top:16px;
+  }
+  .toggle-row .lbl{font-size:13px;color:var(--text-0);font-weight:600;}
+  .toggle-row .desc{font-size:12px;color:var(--text-2);margin-top:2px;}
+  .switch{
+    position:relative;width:42px;height:24px;flex:none;
+  }
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .switch .track{
+    position:absolute;inset:0;background:var(--bg-3);border:1px solid var(--line);
+    border-radius:999px;transition:background .15s ease;
+  }
+  .switch .knob{
+    position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+    background:var(--text-2);transition:transform .15s ease, background .15s ease;
+  }
+  .switch input:checked + .track{background:var(--accent-dim);}
+  .switch input:checked + .track .knob{background:#fff;}
+  .switch input:checked ~ .knob{transform:translateX(18px);background:#fff;}
+
+  footer{
+    max-width:980px;margin:0 auto;padding:10px 20px 50px;
+    color:var(--text-2);font-size:12px;text-align:center;font-family:var(--font-mono);
+  }
+
+  @media (max-width:600px){
+    .panel{padding:18px;}
+    .btn-row{flex-direction:column;}
+    button.btn{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wordmark">
+    <h1>IRIS</h1>
+    <span class="tag">optical file relay</span>
+  </div>
+  <div class="spectrum-strip"></div>
+  <p class="sub">Send files as bursts of colored light. IRIS packs each transmission into a grid of colors — not just black and white — and cycles through frames fast enough to carry a whole file across open air, screen to camera, no network required.</p>
+</header>
+
+<main>
+  <nav class="tabs" role="tablist">
+    <button id="tab-send" class="active" role="tab" aria-selected="true">Send</button>
+    <button id="tab-receive" role="tab" aria-selected="false">Receive</button>
+  </nav>
+
+  <!-- ============================= SEND ============================= -->
+  <section id="panel-send">
+    <div class="panel" id="send-pick-panel">
+      <h2>1. Choose a file</h2>
+      <p class="hint">Anything works — the transfer is byte-exact and checksummed per frame.</p>
+
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a file to send">
+        <div class="icon">◇</div>
+        <div class="primary">Drop a file here, or click to browse</div>
+        <div class="secondary">Stored only in this tab — nothing is uploaded anywhere</div>
+      </div>
+      <input type="file" id="file-input">
+
+      <div id="send-file-card" class="hidden" style="margin-top:14px;">
+        <div class="file-card">
+          <div class="swatch" id="send-file-icon">◇</div>
+          <div class="meta">
+            <div class="name" id="send-file-name">—</div>
+            <div class="sub" id="send-file-sub">—</div>
+          </div>
+          <button class="clear" id="send-file-clear">Remove</button>
+        </div>
+        <div class="preview-box hidden" id="send-preview"></div>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="send-settings-panel">
+      <h2>2. Set transmission quality</h2>
+      <p class="hint">Denser grids move more data per frame but need a steadier, closer camera. Start with Balanced.</p>
+
+      <div class="settings-row">
+        <div class="field">
+          <label for="preset-select">Preset</label>
+          <select id="preset-select">
+            <option value="reliable">Reliable — easiest to scan</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="fast">Fast — bigger grid</option>
+            <option value="ultra">Ultra — max density (steady camera, close range)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fps-range">Frame rate</label>
+          <input type="range" id="fps-range" min="2" max="15" value="8" step="1">
+          <div class="rangeval"><span id="fps-val">8</span> frames/sec</div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat"><div class="k">Grid</div><div class="v" id="stat-grid">—</div></div>
+        <div class="stat"><div class="k">Colors/cell</div><div class="v" id="stat-colors">—</div></div>
+        <div class="stat"><div class="k">Per frame</div><div class="v" id="stat-perframe">—</div></div>
+        <div class="stat"><div class="k">Est. throughput</div><div class="v" id="stat-throughput">—</div></div>
+        <div class="stat"><div class="k">Total frames</div><div class="v" id="stat-totalframes">—</div></div>
+        <div class="stat"><div class="k">Est. first pass</div><div class="v" id="stat-time">—</div></div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="lbl">Loopback test (no second device)</div>
+          <div class="desc">Decode the signal straight from this screen, to check everything works before pairing a phone.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="loopback-toggle">
+          <span class="track"><span class="knob"></span></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="send-transmit-panel">
+      <h2>3. Broadcast</h2>
+      <p class="hint">Point the receiving camera at this pattern, filling as much of its view as comfortable. Keep both screens steady.</p>
+
+      <div class="aperture idle" id="tx-aperture">
+        <div class="ring"></div>
+        <div class="aperture-inner">
+          <canvas id="tx-canvas" width="600" height="600"></canvas>
+        </div>
+      </div>
+
+      <div class="status-line" id="tx-status">Ready to broadcast</div>
+      <div class="progress-track"><div class="progress-fill" id="tx-progress"></div></div>
+      <div class="progress-label"><span id="tx-frame-label">frame 0 / 0</span><span id="tx-loop-label">loop 0</span></div>
+
+      <div class="btn-row">
+        <button class="btn primary" id="tx-start">Start broadcasting</button>
+        <button class="btn hidden" id="tx-stop">Stop</button>
+        <button class="btn small" id="tx-fullscreen">Fullscreen</button>
+      </div>
+
+      <div id="loopback-wrap" class="hidden" style="margin-top:26px;border-top:1px solid var(--line);padding-top:22px;">
+        <h2 style="font-size:15px;">Loopback receiver</h2>
+        <div class="aperture idle" id="lb-aperture" style="max-width:260px;">
+          <div class="ring"></div>
+          <div class="aperture-inner">
+            <canvas id="lb-canvas" width="300" height="300"></canvas>
+          </div>
+        </div>
+        <div class="status-line" id="lb-status">Waiting for broadcast to start…</div>
+        <div class="progress-track"><div class="progress-fill" id="lb-progress"></div></div>
+        <div class="progress-label"><span id="lb-frame-label">0%</span><span id="lb-recv-label"></span></div>
+        <div id="lb-result" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ RECEIVE ============================ -->
+  <section id="panel-receive" class="hidden">
+    <div class="panel" id="recv-scan-panel">
+      <h2>Point your camera at the sender's screen</h2>
+      <p class="hint">IRIS locks onto the four corner markers, then reads the grid every frame. Frames repeat until everything arrives, so brief interruptions are fine.</p>
+
+      <div class="aperture idle" id="rx-aperture">
+        <div class="ring"></div>
+        <div class="aperture-inner">
+          <video id="rx-video" playsinline muted></video>
+          <canvas class="overlay-canvas" id="rx-overlay"></canvas>
+          <div class="placeholder" id="rx-placeholder">Camera off</div>
+        </div>
+      </div>
+
+      <div class="status-line" id="rx-status">Camera not started</div>
+      <div class="progress-track"><div class="progress-fill" id="rx-progress"></div></div>
+      <div class="progress-label"><span id="rx-frame-label">0%</span><span id="rx-recv-label"></span></div>
+
+      <div class="btn-row">
+        <button class="btn primary" id="rx-start">Start camera</button>
+        <button class="btn hidden" id="rx-stop">Stop camera</button>
+        <button class="btn small hidden" id="rx-switch">Switch camera</button>
+        <button class="btn small danger hidden" id="rx-reset">Reset</button>
+      </div>
+
+      <div class="callout"><span class="ic">◇</span><span>Fill your camera's view with the sender's pattern and hold steady. If your device has more than one camera, use "Switch camera" to try the other one.</span></div>
+    </div>
+
+    <div class="panel hidden" id="recv-result-panel">
+      <h2>File received</h2>
+      <div class="file-card">
+        <div class="swatch" id="recv-file-icon">◇</div>
+        <div class="meta">
+          <div class="name" id="recv-file-name">—</div>
+          <div class="sub" id="recv-file-sub">—</div>
+        </div>
+      </div>
+      <div class="preview-box hidden" id="recv-preview"></div>
+      <div class="btn-row">
+        <a class="btn primary" id="recv-download" download>Download</a>
+        <button class="btn" id="recv-another">Receive another file</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>IRIS runs entirely in this tab. Files never leave your device except as light.</footer>
+
+<script>
+'use strict';
+/* =========================================================================
+   PROTOCOL CORE
+   Palette-based color grid encoding, CRC-protected framing, and the
+   marker-detection / homography sampling used to read the grid back from
+   a camera. This section mirrors a version validated with a standalone
+   Node test harness (bit packing round trips, CRC rejection, and a
+   synthetic end-to-end camera-warp simulation) before being wired to the
+   canvas/camera UI below.
+   ========================================================================= */
+const Proto = (() => {
+  const PALETTE_STD = [
+    [0,0,0],[0,0,255],[0,255,0],[0,255,255],
+    [255,0,0],[255,0,255],[255,255,0],[255,255,255],
+  ];
+  const MARKER_COLOR = [255,128,0];
+  const PALETTE_HD = PALETTE_STD.concat([
+    [128,0,0],[0,128,0],[0,0,128],[128,128,0],
+    [128,0,128],[0,128,128],[128,128,128],[200,200,200],
+  ]);
+
+  function bitsPerCell(mode){ return mode === 'hd' ? 4 : 3; }
+  function palette(mode){ return mode === 'hd' ? PALETTE_HD : PALETTE_STD; }
+
+  function nearestColorIndex(rgb, pal){
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pal.length; i++){
+      const c = pal[i];
+      const d = (rgb[0]-c[0])**2 + (rgb[1]-c[1])**2 + (rgb[2]-c[2])**2;
+      if (d < bestD){ bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function crc16(bytes){
+    let crc = 0xFFFF;
+    for (let i = 0; i < bytes.length; i++){
+      crc ^= (bytes[i] << 8);
+      for (let b = 0; b < 8; b++){
+        crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+        crc &= 0xFFFF;
+      }
+    }
+    return crc;
+  }
+
+  function bytesToSymbols(bytes, bitsPer){
+    const symbols = [];
+    let acc = 0, accBits = 0;
+    for (let i = 0; i < bytes.length; i++){
+      acc = (acc << 8) | bytes[i];
+      accBits += 8;
+      while (accBits >= bitsPer){
+        accBits -= bitsPer;
+        symbols.push((acc >> accBits) & ((1 << bitsPer) - 1));
+      }
+    }
+    if (accBits > 0) symbols.push((acc << (bitsPer - accBits)) & ((1 << bitsPer) - 1));
+    return symbols;
+  }
+
+  function symbolsToBytes(symbols, bitsPer, byteLen){
+    const out = new Uint8Array(byteLen);
+    let acc = 0, accBits = 0, outIdx = 0;
+    for (let i = 0; i < symbols.length && outIdx < byteLen; i++){
+      acc = (acc << bitsPer) | symbols[i];
+      accBits += bitsPer;
+      while (accBits >= 8 && outIdx < byteLen){
+        accBits -= 8;
+        out[outIdx++] = (acc >> accBits) & 0xFF;
+      }
+    }
+    return out;
+  }
+
+  const HEADER_LEN = 11;
+  const MAGIC = 0xC7;
+  const META_FRAME_ID = 0xFFFFFF;
+
+  function buildHeader(frameId, totalFrames, payload){
+    const h = new Uint8Array(HEADER_LEN);
+    h[0] = MAGIC;
+    h[1] = (frameId >>> 16) & 0xFF; h[2] = (frameId >>> 8) & 0xFF; h[3] = frameId & 0xFF;
+    h[4] = (totalFrames >>> 16) & 0xFF; h[5] = (totalFrames >>> 8) & 0xFF; h[6] = totalFrames & 0xFF;
+    h[7] = (payload.length >>> 8) & 0xFF; h[8] = payload.length & 0xFF;
+    const c = crc16(payload);
+    h[9] = (c >>> 8) & 0xFF; h[10] = c & 0xFF;
+    return h;
+  }
+
+  function parseHeader(bytes){
+    if (bytes[0] !== MAGIC) return null;
+    const frameId = (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
+    const totalFrames = (bytes[4] << 16) | (bytes[5] << 8) | bytes[6];
+    const payloadLen = (bytes[7] << 8) | bytes[8];
+    const crc = (bytes[9] << 8) | bytes[10];
+    return { frameId, totalFrames, payloadLen, crc };
+  }
+
+  function payloadBytesPerFrame(dataCells, bitsPer){
+    const totalBytes = Math.floor((dataCells * bitsPer) / 8);
+    return Math.max(0, totalBytes - HEADER_LEN);
+  }
+
+  function planDataFrames(fileBytes, dataCells, bitsPer){
+    const cap = payloadBytesPerFrame(dataCells, bitsPer);
+    if (cap <= 0) throw new Error('Grid too small for header at this density');
+    const totalFrames = Math.max(1, Math.ceil(fileBytes.length / cap));
+    const frames = [];
+    for (let i = 0; i < totalFrames; i++){
+      const start = i * cap;
+      const end = Math.min(fileBytes.length, start + cap);
+      const payload = fileBytes.slice(start, end);
+      const header = buildHeader(i, totalFrames, payload);
+      const full = new Uint8Array(header.length + payload.length);
+      full.set(header, 0); full.set(payload, header.length);
+      frames.push(full);
+    }
+    return { frames, totalFrames, cap };
+  }
+
+  function buildMetaFrame(meta, dataCells, bitsPer){
+    const json = JSON.stringify(meta);
+    const payload = new TextEncoder().encode(json);
+    const cap = payloadBytesPerFrame(dataCells, bitsPer);
+    if (payload.length > cap) throw new Error('Metadata too large for grid at this density');
+    const header = buildHeader(META_FRAME_ID, 1, payload);
+    const full = new Uint8Array(header.length + payload.length);
+    full.set(header, 0); full.set(payload, header.length);
+    return full;
+  }
+
+  function frameToSymbols(frameBytes, dataCells, bitsPer){
+    const symbols = bytesToSymbols(frameBytes, bitsPer);
+    while (symbols.length < dataCells) symbols.push(0);
+    return symbols.slice(0, dataCells);
+  }
+
+  function symbolsToFrame(symbols, bitsPer){
+    const headerSymCount = Math.ceil((HEADER_LEN * 8) / bitsPer);
+    const headerBytes = symbolsToBytes(symbols.slice(0, headerSymCount), bitsPer, HEADER_LEN);
+    const parsed = parseHeader(headerBytes);
+    if (!parsed) return null;
+    const totalLen = HEADER_LEN + parsed.payloadLen;
+    const totalBytes = symbolsToBytes(symbols, bitsPer, totalLen);
+    const payload = totalBytes.slice(HEADER_LEN);
+    const crc = crc16(payload);
+    if (crc !== parsed.crc) return null;
+    return { frameId: parsed.frameId, totalFrames: parsed.totalFrames, payload };
+  }
+
+  function computeHomography(corners){
+    const [[x0,y0],[x1,y1],[x2,y2],[x3,y3]] = corners;
+    const dx1 = x1-x2, dx2 = x3-x2, dx3 = x0-x1+x2-x3;
+    const dy1 = y1-y2, dy2 = y3-y2, dy3 = y0-y1+y2-y3;
+    let g, h;
+    const denom = dx1*dy2 - dx2*dy1;
+    if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9){ g = 0; h = 0; }
+    else {
+      g = (dx3*dy2 - dx2*dy3) / denom;
+      h = (dx1*dy3 - dx3*dy1) / denom;
+    }
+    const a = x1-x0+g*x1, b = x3-x0+h*x3, c = x0;
+    const d = y1-y0+g*y1, e = y3-y0+h*y3, f = y0;
+    return { a,b,c,d,e,f,g,h };
+  }
+
+  function applyHomography(H, u, v){
+    const denom = H.g*u + H.h*v + 1;
+    return [ (H.a*u + H.b*v + H.c)/denom, (H.d*u + H.e*v + H.f)/denom ];
+  }
+
+  function dataCellPositions(gridSide, markerCells){
+    const positions = [];
+    for (let row = 0; row < gridSide; row++){
+      for (let col = 0; col < gridSide; col++){
+        const inTL = row < markerCells && col < markerCells;
+        const inTR = row < markerCells && col >= gridSide - markerCells;
+        const inBL = row >= gridSide - markerCells && col < markerCells;
+        const inBR = row >= gridSide - markerCells && col >= gridSide - markerCells;
+        if (inTL || inTR || inBL || inBR) continue;
+        positions.push([col, row]);
+      }
+    }
+    return positions;
+  }
+
+  function findMarkerCorners(buffer, markerColor, tolerance, step){
+    step = step || 4;
+    const { width, height, data } = buffer;
+    const tol2 = tolerance*tolerance;
+    const gw = Math.ceil(width/step), gh = Math.ceil(height/step);
+    const hitGrid = new Uint8Array(gw*gh);
+    for (let gy = 0; gy < gh; gy++){
+      for (let gx = 0; gx < gw; gx++){
+        const x = gx*step, y = gy*step;
+        const idx = (y*width + x) * 4;
+        const dr = data[idx]-markerColor[0], dg = data[idx+1]-markerColor[1], db = data[idx+2]-markerColor[2];
+        if (dr*dr+dg*dg+db*db <= tol2) hitGrid[gy*gw+gx] = 1;
+      }
+    }
+    const visited = new Uint8Array(gw*gh);
+    const clusters = [];
+    const qx = new Int32Array(gw*gh), qy = new Int32Array(gw*gh);
+    for (let gy = 0; gy < gh; gy++){
+      for (let gx = 0; gx < gw; gx++){
+        const start = gy*gw+gx;
+        if (!hitGrid[start] || visited[start]) continue;
+        let head = 0, tail = 0;
+        qx[tail]=gx; qy[tail]=gy; tail++;
+        visited[start]=1;
+        let sumX=0,sumY=0,count=0;
+        while (head < tail){
+          const cx=qx[head], cy=qy[head]; head++;
+          sumX+=cx; sumY+=cy; count++;
+          for (let dy=-1; dy<=1; dy++){
+            for (let dx=-1; dx<=1; dx++){
+              if (dx===0 && dy===0) continue;
+              const nx=cx+dx, ny=cy+dy;
+              if (nx<0||ny<0||nx>=gw||ny>=gh) continue;
+              const nidx = ny*gw+nx;
+              if (hitGrid[nidx] && !visited[nidx]){ visited[nidx]=1; qx[tail]=nx; qy[tail]=ny; tail++; }
+            }
+          }
+        }
+        clusters.push({ x:(sumX/count)*step, y:(sumY/count)*step, weight:count });
+      }
+    }
+    if (clusters.length < 4) return null;
+    clusters.sort((a,b)=>b.weight-a.weight);
+    const top4 = clusters.slice(0,4);
+    const tl = top4.reduce((a,b)=> (a.x+a.y <= b.x+b.y ? a : b));
+    const br = top4.reduce((a,b)=> (a.x+a.y >= b.x+b.y ? a : b));
+    const tr = top4.reduce((a,b)=> (a.x-a.y >= b.x-b.y ? a : b));
+    const bl = top4.reduce((a,b)=> (a.x-a.y <= b.x-b.y ? a : b));
+    const ids = new Set([tl,tr,br,bl]);
+    if (ids.size < 4) return null;
+    return { tl:[tl.x,tl.y], tr:[tr.x,tr.y], br:[br.x,br.y], bl:[bl.x,bl.y] };
+  }
+
+  function sampleGrid(buffer, H, gridSide, markerCells, pal){
+    const { width, height, data } = buffer;
+    const positions = dataCellPositions(gridSide, markerCells);
+    const symbols = new Array(positions.length);
+    for (let i = 0; i < positions.length; i++){
+      const [col,row] = positions[i];
+      const u = (col+0.5)/gridSide, v = (row+0.5)/gridSide;
+      const [px,py] = applyHomography(H, u, v);
+      const xi = Math.min(width-1, Math.max(0, Math.round(px)));
+      const yi = Math.min(height-1, Math.max(0, Math.round(py)));
+      const idx = (yi*width+xi)*4;
+      symbols[i] = nearestColorIndex([data[idx],data[idx+1],data[idx+2]], pal);
+    }
+    return symbols;
+  }
+
+  return {
+    PALETTE_STD, PALETTE_HD, MARKER_COLOR,
+    bitsPerCell, palette, nearestColorIndex,
+    crc16, bytesToSymbols, symbolsToBytes,
+    HEADER_LEN, MAGIC, META_FRAME_ID,
+    buildHeader, parseHeader,
+    payloadBytesPerFrame, planDataFrames, buildMetaFrame,
+    frameToSymbols, symbolsToFrame,
+    computeHomography, applyHomography,
+    dataCellPositions, findMarkerCorners, sampleGrid,
+  };
+})();
+
+/* =========================================================================
+   PRESETS
+   ========================================================================= */
+const PRESETS = {
+  reliable: { gridSide: 30, markerCells: 6,  mode: 'std' },
+  balanced: { gridSide: 40, markerCells: 7,  mode: 'std' },
+  fast:     { gridSide: 52, markerCells: 9,  mode: 'std' },
+  ultra:    { gridSide: 60, markerCells: 11, mode: 'hd'  },
+};
+
+function presetStats(preset, fps, fileSize){
+  const bitsPer = Proto.bitsPerCell(preset.mode);
+  const positions = Proto.dataCellPositions(preset.gridSide, preset.markerCells);
+  const dataCells = positions.length;
+  const cap = Proto.payloadBytesPerFrame(dataCells, bitsPer);
+  const totalFrames = fileSize != null ? Math.max(1, Math.ceil(fileSize / cap) + 1) : null;
+  const bytesPerSec = cap * fps;
+  return { bitsPer, dataCells, cap, totalFrames, bytesPerSec, colors: Proto.palette(preset.mode).length };
+}
+
+function fmtBytes(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/1024/1024).toFixed(2) + ' MB';
+}
+function fmtRate(bps){ return fmtBytes(bps) + '/s'; }
+function fmtTime(s){
+  if (s < 60) return Math.ceil(s) + 's';
+  return Math.floor(s/60) + 'm ' + Math.round(s%60) + 's';
+}
+
+/* =========================================================================
+   TAB SWITCHING
+   ========================================================================= */
+const tabSend = document.getElementById('tab-send');
+const tabReceive = document.getElementById('tab-receive');
+const panelSend = document.getElementById('panel-send');
+const panelReceive = document.getElementById('panel-receive');
+tabSend.addEventListener('click', () => setTab('send'));
+tabReceive.addEventListener('click', () => setTab('receive'));
+function setTab(which){
+  const send = which === 'send';
+  tabSend.classList.toggle('active', send);
+  tabReceive.classList.toggle('active', !send);
+  tabSend.setAttribute('aria-selected', send);
+  tabReceive.setAttribute('aria-selected', !send);
+  panelSend.classList.toggle('hidden', !send);
+  panelReceive.classList.toggle('hidden', send);
+  if (!send) stopTransmit();
+  else stopReceive();
+}
+
+/* =========================================================================
+   PREVIEW RENDERING (shared by send-side and receive-side)
+   ========================================================================= */
+function iconFor(mime, name){
+  if (mime && mime.startsWith('image/')) return '▧';
+  if (mime && mime.startsWith('video/')) return '▶';
+  if (mime && mime.startsWith('audio/')) return '♪';
+  if (mime === 'application/pdf') return '▤';
+  if (mime && mime.startsWith('text/')) return '≡';
+  if (/\.(zip|rar|7z|tar|gz)$/i.test(name||'')) return '▥';
+  return '◇';
+}
+
+function renderPreview(container, blob, mime, name){
+  container.innerHTML = '';
+  container.classList.remove('hidden');
+  const url = URL.createObjectURL(blob);
+
+  if (mime && mime.startsWith('image/')){
+    const img = document.createElement('img');
+    img.src = url; container.appendChild(img);
+  } else if (mime && mime.startsWith('video/')){
+    const v = document.createElement('video');
+    v.src = url; v.controls = true; container.appendChild(v);
+  } else if (mime && mime.startsWith('audio/')){
+    const a = document.createElement('audio');
+    a.src = url; a.controls = true; container.appendChild(a);
+  } else if (mime === 'application/pdf'){
+    const f = document.createElement('iframe');
+    f.src = url; container.appendChild(f);
+  } else if ((mime && mime.startsWith('text/')) || /\.(txt|md|json|csv|log|js|css|html?|xml|ya?ml)$/i.test(name||'')){
+    const pre = document.createElement('pre');
+    blob.text().then(t => {
+      pre.textContent = t.length > 6000 ? t.slice(0,6000) + '\n\n… truncated in preview, full file is intact' : t;
+    }).catch(()=>{ pre.textContent = '(unable to preview as text)'; });
+    container.appendChild(pre);
+  } else {
+    const div = document.createElement('div');
+    div.className = 'generic';
+    div.innerHTML = '<span class="big">' + iconFor(mime, name) + '</span>No inline preview for this file type — it\u2019s ready to download.';
+    container.appendChild(div);
+  }
+  return url;
+}
+
+/* =========================================================================
+   SEND: file selection
+   ========================================================================= */
+let sendFile = null;      // File object
+let sendFileBytes = null; // Uint8Array
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const sendFileCard = document.getElementById('send-file-card');
+const sendFileName = document.getElementById('send-file-name');
+const sendFileSub = document.getElementById('send-file-sub');
+const sendFileIcon = document.getElementById('send-file-icon');
+const sendPreview = document.getElementById('send-preview');
+const sendSettingsPanel = document.getElementById('send-settings-panel');
+const sendTransmitPanel = document.getElementById('send-transmit-panel');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) loadSendFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadSendFile(fileInput.files[0]); });
+
+document.getElementById('send-file-clear').addEventListener('click', () => {
+  sendFile = null; sendFileBytes = null;
+  sendFileCard.classList.add('hidden');
+  sendSettingsPanel.classList.add('hidden');
+  sendTransmitPanel.classList.add('hidden');
+  dropzone.classList.remove('hidden');
+  stopTransmit();
+});
+
+async function loadSendFile(file){
+  sendFile = file;
+  const buf = await file.arrayBuffer();
+  sendFileBytes = new Uint8Array(buf);
+  sendFileName.textContent = file.name;
+  sendFileSub.textContent = fmtBytes(file.size) + ' · ' + (file.type || 'unknown type');
+  sendFileIcon.textContent = iconFor(file.type, file.name);
+  sendFileCard.classList.remove('hidden');
+  dropzone.classList.add('hidden');
+  const blob = file.slice(0, file.size, file.type || undefined);
+  renderPreview(sendPreview, blob, file.type, file.name);
+  sendSettingsPanel.classList.remove('hidden');
+  sendTransmitPanel.classList.remove('hidden');
+  updateSendStats();
+}
+
+/* =========================================================================
+   SEND: settings + stats
+   ========================================================================= */
+const presetSelect = document.getElementById('preset-select');
+const fpsRange = document.getElementById('fps-range');
+const fpsVal = document.getElementById('fps-val');
+presetSelect.addEventListener('change', updateSendStats);
+fpsRange.addEventListener('input', () => { fpsVal.textContent = fpsRange.value; updateSendStats(); });
+
+function currentPreset(){ return PRESETS[presetSelect.value]; }
+function currentFps(){ return parseInt(fpsRange.value, 10); }
+
+function updateSendStats(){
+  if (!sendFileBytes) return;
+  const preset = currentPreset();
+  const fps = currentFps();
+  const s = presetStats(preset, fps, sendFileBytes.length);
+  document.getElementById('stat-grid').textContent = preset.gridSide + '×' + preset.gridSide;
+  document.getElementById('stat-colors').textContent = s.colors;
+  document.getElementById('stat-perframe').textContent = fmtBytes(s.cap);
+  document.getElementById('stat-throughput').textContent = fmtRate(s.bytesPerSec);
+  document.getElementById('stat-totalframes').textContent = s.totalFrames;
+  document.getElementById('stat-time').textContent = fmtTime(s.totalFrames / fps);
+}
+
+/* =========================================================================
+   SEND: transmit loop
+   ========================================================================= */
+let txState = null; // { frames, gridSide, markerCells, mode, positions, dataCells, timer, frameIdx, loopCount }
+const txCanvas = document.getElementById('tx-canvas');
+const txCtx = txCanvas.getContext('2d');
+const txAperture = document.getElementById('tx-aperture');
+const txStatus = document.getElementById('tx-status');
+const txProgress = document.getElementById('tx-progress');
+const txFrameLabel = document.getElementById('tx-frame-label');
+const txLoopLabel = document.getElementById('tx-loop-label');
+const txStart = document.getElementById('tx-start');
+const txStop = document.getElementById('tx-stop');
+
+function buildTxPlan(){
+  const preset = currentPreset();
+  const bitsPer = Proto.bitsPerCell(preset.mode);
+  const pal = Proto.palette(preset.mode);
+  const positions = Proto.dataCellPositions(preset.gridSide, preset.markerCells);
+  const dataCells = positions.length;
+  const { frames, totalFrames, cap } = Proto.planDataFrames(sendFileBytes, dataCells, bitsPer);
+  const meta = { name: sendFile.name, size: sendFileBytes.length, mime: sendFile.type || 'application/octet-stream', totalFrames };
+  const metaFrame = Proto.buildMetaFrame(meta, dataCells, bitsPer);
+  const allFrames = [metaFrame, ...frames];
+  return { preset, bitsPer, pal, positions, dataCells, allFrames, totalFrames, cap };
+}
+
+function drawGridFrame(ctx, canvas, plan, frameBytes){
+  const { preset, bitsPer, pal, positions, dataCells } = plan;
+  const gridSide = preset.gridSide, markerCells = preset.markerCells;
+  const cell = canvas.width / gridSide;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // quiet-zone background
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  // corner markers
+  ctx.fillStyle = 'rgb(' + Proto.MARKER_COLOR.join(',') + ')';
+  const m = markerCells * cell;
+  ctx.fillRect(0,0,m,m);
+  ctx.fillRect(canvas.width-m,0,m,m);
+  ctx.fillRect(0,canvas.height-m,m,m);
+  ctx.fillRect(canvas.width-m,canvas.height-m,m,m);
+  // data cells
+  const symbols = Proto.frameToSymbols(frameBytes, dataCells, bitsPer);
+  for (let i = 0; i < positions.length; i++){
+    const [col,row] = positions[i];
+    const c = pal[symbols[i]];
+    ctx.fillStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    ctx.fillRect(Math.round(col*cell), Math.round(row*cell), Math.ceil(cell)+1, Math.ceil(cell)+1);
+  }
+}
+
+function startTransmit(){
+  if (!sendFileBytes) return;
+  let plan;
+  try { plan = buildTxPlan(); }
+  catch(err){ txStatus.textContent = 'Error: ' + err.message; txStatus.className='status-line bad'; return; }
+
+  txState = { plan, frameIdx: 0, loopCount: 0, lastTs: 0, interval: 1000/currentFps() };
+  txAperture.classList.remove('idle');
+  txStart.classList.add('hidden');
+  txStop.classList.remove('hidden');
+  presetSelect.disabled = true;
+  txStatus.textContent = 'Broadcasting…';
+  txStatus.className = 'status-line good';
+
+  const loop = (ts) => {
+    if (!txState) return;
+    if (ts - txState.lastTs >= txState.interval){
+      txState.lastTs = ts;
+      const frames = txState.plan.allFrames;
+      const frameBytes = frames[txState.frameIdx];
+      drawGridFrame(txCtx, txCanvas, txState.plan, frameBytes);
+      const dataFrameIdx = txState.frameIdx - 1; // -1 = meta frame
+      txFrameLabel.textContent = dataFrameIdx < 0
+        ? 'metadata frame'
+        : 'frame ' + (dataFrameIdx+1) + ' / ' + txState.plan.totalFrames;
+      txProgress.style.width = (100 * (txState.frameIdx+1) / frames.length) + '%';
+      txState.frameIdx++;
+      if (txState.frameIdx >= frames.length){
+        txState.frameIdx = 0;
+        txState.loopCount++;
+        txLoopLabel.textContent = 'loop ' + txState.loopCount;
+      }
+    }
+    txState.raf = requestAnimationFrame(loop);
+  };
+  txState.raf = requestAnimationFrame(loop);
+}
+
+function stopTransmit(){
+  if (txState && txState.raf) cancelAnimationFrame(txState.raf);
+  txState = null;
+  txAperture.classList.add('idle');
+  txStart.classList.remove('hidden');
+  txStop.classList.add('hidden');
+  presetSelect.disabled = false;
+  txStatus.textContent = 'Ready to broadcast';
+  txStatus.className = 'status-line';
+  txProgress.style.width = '0%';
+  txCtx.clearRect(0,0,txCanvas.width,txCanvas.height);
+}
+
+txStart.addEventListener('click', startTransmit);
+txStop.addEventListener('click', stopTransmit);
+document.getElementById('tx-fullscreen').addEventListener('click', () => {
+  const el = document.getElementById('send-transmit-panel');
+  if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+});
+
+/* =========================================================================
+   RECEIVER CORE (shared logic used by both camera-based receive and the
+   loopback test — both feed an ImageData-like buffer into the same
+   decode pipeline)
+   ========================================================================= */
+function createReceiverSession(preset, onUpdate){
+  const bitsPer = Proto.bitsPerCell(preset.mode);
+  const pal = Proto.palette(preset.mode);
+  return {
+    preset, bitsPer, pal,
+    metaFrame: null,
+    dataFrames: new Map(), // frameId -> Uint8Array payload
+    totalFrames: null,
+    lastCorners: null,
+    onUpdate,
+  };
+}
+
+// Try every combination of markerCells (grid size can vary by preset) —
+// receiver doesn't know the sender's preset in advance, so we probe the
+// small set of known presets each attempt until one locks and validates.
+const PRESET_LIST = Object.values(PRESETS);
+
+function decodeAttempt(session, buffer){
+  // If we already know the working preset (from a prior lock), only try that one.
+  const candidates = session.lockedPreset ? [session.lockedPreset] : PRESET_LIST;
+  for (const preset of candidates){
+    const corners = Proto.findMarkerCorners(buffer, Proto.MARKER_COLOR, 55, 4);
+    if (!corners) continue;
+    const H = Proto.computeHomography([corners.tl, corners.tr, corners.br, corners.bl]);
+    const bitsPer = Proto.bitsPerCell(preset.mode);
+    const pal = Proto.palette(preset.mode);
+    const symbols = Proto.sampleGrid(buffer, H, preset.gridSide, preset.markerCells, pal);
+    const decoded = Proto.symbolsToFrame(symbols, bitsPer);
+    session.lastCorners = corners;
+    if (decoded){
+      if (!session.lockedPreset) session.lockedPreset = preset;
+      applyDecodedFrame(session, decoded);
+      return { corners, locked: true };
+    }
+    if (session.lockedPreset) return { corners, locked: false };
+  }
+  return { corners: session.lastCorners, locked: false };
+}
+
+function applyDecodedFrame(session, decoded){
+  if (decoded.frameId === Proto.META_FRAME_ID){
+    if (!session.metaFrame){
+      try { session.metaFrame = JSON.parse(new TextDecoder().decode(decoded.payload)); }
+      catch(e){ /* ignore malformed meta */ }
+    }
+  } else {
+    session.totalFrames = decoded.totalFrames;
+    if (!session.dataFrames.has(decoded.frameId)){
+      session.dataFrames.set(decoded.frameId, decoded.payload);
+    }
+  }
+  session.onUpdate(session);
+}
+
+function sessionComplete(session){
+  return session.totalFrames != null && session.dataFrames.size >= session.totalFrames;
+}
+
+function assembleFile(session){
+  const ids = [...session.dataFrames.keys()].sort((a,b)=>a-b);
+  let total = 0;
+  for (const id of ids) total += session.dataFrames.get(id).length;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const id of ids){ const p = session.dataFrames.get(id); out.set(p, offset); offset += p.length; }
+  const meta = session.metaFrame || { name: 'received-file', mime: 'application/octet-stream', size: total };
+  return { bytes: out, meta };
+}
+
+/* =========================================================================
+   RECEIVE: camera-based
+   ========================================================================= */
+let rxSession = null;
+let rxStream = null;
+let rxRaf = null;
+let rxCanvas = document.createElement('canvas'); // offscreen capture buffer
+let rxCtx = rxCanvas.getContext('2d', { willReadFrequently: true });
+let rxDeviceList = [];
+let rxDeviceIdx = 0;
+
+const rxVideo = document.getElementById('rx-video');
+const rxOverlay = document.getElementById('rx-overlay');
+const rxOverlayCtx = rxOverlay.getContext('2d');
+const rxAperture = document.getElementById('rx-aperture');
+const rxPlaceholder = document.getElementById('rx-placeholder');
+const rxStatus = document.getElementById('rx-status');
+const rxProgress = document.getElementById('rx-progress');
+const rxFrameLabel = document.getElementById('rx-frame-label');
+const rxRecvLabel = document.getElementById('rx-recv-label');
+const rxStartBtn = document.getElementById('rx-start');
+const rxStopBtn = document.getElementById('rx-stop');
+const rxSwitchBtn = document.getElementById('rx-switch');
+const rxResetBtn = document.getElementById('rx-reset');
+const recvScanPanel = document.getElementById('recv-scan-panel');
+const recvResultPanel = document.getElementById('recv-result-panel');
+
+async function startReceive(){
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    rxDeviceList = devices.filter(d => d.kind === 'videoinput');
+  } catch(e){ rxDeviceList = []; }
+
+  const constraints = { video: { facingMode: { ideal: 'environment' } }, audio: false };
+  try {
+    rxStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch(e){
+    rxStatus.textContent = 'Camera access denied or unavailable: ' + e.message;
+    rxStatus.className = 'status-line bad';
+    return;
+  }
+  rxVideo.srcObject = rxStream;
+  await rxVideo.play().catch(()=>{});
+  rxPlaceholder.classList.add('hidden');
+  rxAperture.classList.remove('idle');
+  rxStartBtn.classList.add('hidden');
+  rxStopBtn.classList.remove('hidden');
+  rxResetBtn.classList.remove('hidden');
+  if (rxDeviceList.length > 1) rxSwitchBtn.classList.remove('hidden');
+  rxStatus.textContent = 'Searching for signal…';
+  rxStatus.className = 'status-line warn';
+
+  rxSession = createReceiverSession(null, onRxUpdate);
+  rxSession.lockedPreset = null;
+
+  const tick = () => {
+    if (!rxStream) return;
+    if (rxVideo.videoWidth > 0){
+      const targetW = 480;
+      const scale = targetW / rxVideo.videoWidth;
+      const w = targetW, h = Math.round(rxVideo.videoHeight * scale);
+      if (rxCanvas.width !== w || rxCanvas.height !== h){ rxCanvas.width = w; rxCanvas.height = h; }
+      rxCtx.drawImage(rxVideo, 0, 0, w, h);
+      let buffer;
+      try { buffer = rxCtx.getImageData(0,0,w,h); } catch(e){ buffer = null; }
+      if (buffer){
+        const result = decodeAttempt(rxSession, buffer);
+        drawOverlay(result.corners, w, h);
+        if (result.corners && !result.locked && rxSession.dataFrames.size === 0){
+          rxStatus.textContent = 'Corner markers found — aligning…';
+          rxStatus.className = 'status-line warn';
+        } else if (!result.corners){
+          rxStatus.textContent = 'Searching for signal…';
+          rxStatus.className = 'status-line warn';
+        }
+      }
+    }
+    rxRaf = requestAnimationFrame(tick);
+  };
+  rxRaf = requestAnimationFrame(tick);
+}
+
+function drawOverlay(corners, srcW, srcH){
+  const cw = rxOverlay.clientWidth || 300, ch = rxOverlay.clientHeight || 300;
+  if (rxOverlay.width !== cw) rxOverlay.width = cw;
+  if (rxOverlay.height !== ch) rxOverlay.height = ch;
+  rxOverlayCtx.clearRect(0,0,cw,ch);
+  if (!corners) return;
+  const sx = cw/srcW, sy = ch/srcH;
+  const pts = [corners.tl, corners.tr, corners.br, corners.bl];
+  rxOverlayCtx.strokeStyle = '#9b8cff';
+  rxOverlayCtx.lineWidth = 2;
+  rxOverlayCtx.beginPath();
+  pts.forEach((p,i) => {
+    const x = p[0]*sx, y = p[1]*sy;
+    if (i===0) rxOverlayCtx.moveTo(x,y); else rxOverlayCtx.lineTo(x,y);
+  });
+  rxOverlayCtx.closePath();
+  rxOverlayCtx.stroke();
+  rxOverlayCtx.fillStyle = '#3ddc84';
+  pts.forEach(p => {
+    rxOverlayCtx.beginPath();
+    rxOverlayCtx.arc(p[0]*sx, p[1]*sy, 4, 0, Math.PI*2);
+    rxOverlayCtx.fill();
+  });
+}
+
+function onRxUpdate(session){
+  const known = session.totalFrames != null;
+  const pct = known ? Math.min(100, Math.round(100*session.dataFrames.size/session.totalFrames)) : 0;
+  rxProgress.style.width = pct + '%';
+  rxFrameLabel.textContent = known ? pct + '%' : 'locking on…';
+  rxRecvLabel.textContent = known ? session.dataFrames.size + ' / ' + session.totalFrames + ' frames' : '';
+  if (known){
+    rxStatus.textContent = 'Receiving — ' + session.dataFrames.size + ' of ' + session.totalFrames + ' frames';
+    rxStatus.className = 'status-line good';
+  }
+  if (sessionComplete(session)){
+    finishReceive(session);
+  }
+}
+
+function finishReceive(session){
+  stopReceive(true);
+  const { bytes, meta } = assembleFile(session);
+  const mime = meta.mime || 'application/octet-stream';
+  const blob = new Blob([bytes], { type: mime });
+  document.getElementById('recv-file-icon').textContent = iconFor(mime, meta.name);
+  document.getElementById('recv-file-name').textContent = meta.name || 'received-file';
+  document.getElementById('recv-file-sub').textContent = fmtBytes(bytes.length) + ' · ' + mime;
+  const url = renderPreview(document.getElementById('recv-preview'), blob, mime, meta.name);
+  const dl = document.getElementById('recv-download');
+  dl.href = url;
+  dl.download = meta.name || 'received-file';
+  recvScanPanel.classList.add('hidden');
+  recvResultPanel.classList.remove('hidden');
+}
+
+function stopReceive(keepPanel){
+  if (rxRaf) cancelAnimationFrame(rxRaf);
+  rxRaf = null;
+  if (rxStream){ rxStream.getTracks().forEach(t => t.stop()); rxStream = null; }
+  rxVideo.srcObject = null;
+  rxAperture.classList.add('idle');
+  rxPlaceholder.classList.remove('hidden');
+  rxStartBtn.classList.remove('hidden');
+  rxStopBtn.classList.add('hidden');
+  rxSwitchBtn.classList.add('hidden');
+  if (!keepPanel){
+    rxStatus.textContent = 'Camera not started';
+    rxStatus.className = 'status-line';
+    rxProgress.style.width = '0%';
+    rxFrameLabel.textContent = '0%';
+    rxRecvLabel.textContent = '';
+    rxResetBtn.classList.add('hidden');
+  }
+  rxOverlayCtx.clearRect(0,0,rxOverlay.width,rxOverlay.height);
+}
+
+rxStartBtn.addEventListener('click', startReceive);
+rxStopBtn.addEventListener('click', () => stopReceive(false));
+rxResetBtn.addEventListener('click', () => {
+  stopReceive(false);
+  recvResultPanel.classList.add('hidden');
+  recvScanPanel.classList.remove('hidden');
+});
+document.getElementById('recv-another').addEventListener('click', () => {
+  recvResultPanel.classList.add('hidden');
+  recvScanPanel.classList.remove('hidden');
+});
+rxSwitchBtn.addEventListener('click', async () => {
+  if (rxDeviceList.length < 2) return;
+  rxDeviceIdx = (rxDeviceIdx + 1) % rxDeviceList.length;
+  if (rxStream) rxStream.getTracks().forEach(t => t.stop());
+  try {
+    rxStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: rxDeviceList[rxDeviceIdx].deviceId } }, audio: false });
+    rxVideo.srcObject = rxStream;
+    await rxVideo.play().catch(()=>{});
+  } catch(e){ /* ignore */ }
+});
+
+/* =========================================================================
+   LOOPBACK TEST MODE (decode straight from the transmit canvas — exercises
+   the exact same marker-detection + homography + sampling pipeline as the
+   camera path, without needing a second device)
+   ========================================================================= */
+const loopbackToggle = document.getElementById('loopback-toggle');
+const loopbackWrap = document.getElementById('loopback-wrap');
+let lbSession = null;
+let lbRaf = null;
+const lbCanvas = document.getElementById('lb-canvas');
+const lbCtx = lbCanvas.getContext('2d', { willReadFrequently: true });
+const lbAperture = document.getElementById('lb-aperture');
+const lbStatus = document.getElementById('lb-status');
+const lbProgress = document.getElementById('lb-progress');
+const lbFrameLabel = document.getElementById('lb-frame-label');
+const lbRecvLabel = document.getElementById('lb-recv-label');
+const lbResult = document.getElementById('lb-result');
+
+loopbackToggle.addEventListener('change', () => {
+  loopbackWrap.classList.toggle('hidden', !loopbackToggle.checked);
+  if (loopbackToggle.checked) armLoopback(); else disarmLoopback();
+});
+
+function armLoopback(){
+  lbSession = createReceiverSession(null, onLbUpdate);
+  lbAperture.classList.remove('idle');
+  lbStatus.textContent = 'Waiting for broadcast to start…';
+  lbStatus.className = 'status-line';
+  lbResult.innerHTML = '';
+  const tick = () => {
+    if (!lbSession) return;
+    if (txState){
+      lbCanvas.width = 300; lbCanvas.height = 300;
+      lbCtx.drawImage(txCanvas, 0, 0, 300, 300);
+      let buffer;
+      try { buffer = lbCtx.getImageData(0,0,300,300); } catch(e){ buffer = null; }
+      if (buffer){
+        const result = decodeAttempt(lbSession, buffer);
+        if (!result.corners){
+          lbStatus.textContent = 'Searching for signal…';
+          lbStatus.className = 'status-line warn';
+        }
+      }
+    }
+    lbRaf = requestAnimationFrame(tick);
+  };
+  lbRaf = requestAnimationFrame(tick);
+}
+
+function disarmLoopback(){
+  if (lbRaf) cancelAnimationFrame(lbRaf);
+  lbRaf = null; lbSession = null;
+  lbAperture.classList.add('idle');
+  lbCtx.clearRect(0,0,lbCanvas.width,lbCanvas.height);
+  lbStatus.textContent = 'Waiting for broadcast to start…';
+  lbStatus.className = 'status-line';
+  lbProgress.style.width = '0%';
+  lbFrameLabel.textContent = '0%';
+  lbRecvLabel.textContent = '';
+  lbResult.innerHTML = '';
+}
+
+function onLbUpdate(session){
+  const known = session.totalFrames != null;
+  const pct = known ? Math.min(100, Math.round(100*session.dataFrames.size/session.totalFrames)) : 0;
+  lbProgress.style.width = pct + '%';
+  lbFrameLabel.textContent = known ? pct + '%' : 'locking on…';
+  lbRecvLabel.textContent = known ? session.dataFrames.size + ' / ' + session.totalFrames + ' frames' : '';
+  if (known){
+    lbStatus.textContent = 'Receiving — ' + session.dataFrames.size + ' of ' + session.totalFrames + ' frames';
+    lbStatus.className = 'status-line good';
+  }
+  if (sessionComplete(session)){
+    const { bytes, meta } = assembleFile(session);
+    const mime = meta.mime || 'application/octet-stream';
+    const blob = new Blob([bytes], { type: mime });
+    lbStatus.textContent = 'Loopback verified — signal decodes correctly';
+    lbStatus.className = 'status-line good';
+    lbResult.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.innerHTML = '<div class="swatch">' + iconFor(mime, meta.name) + '</div>' +
+      '<div class="meta"><div class="name">' + (meta.name||'file') + '</div>' +
+      '<div class="sub">' + fmtBytes(bytes.length) + ' · verified byte-exact</div></div>';
+    lbResult.appendChild(card);
+    if (lbRaf) cancelAnimationFrame(lbRaf);
+    lbRaf = null;
+  }
+}
+</script>
+</body>
+</html>
